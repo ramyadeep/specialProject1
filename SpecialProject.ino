@@ -1,39 +1,98 @@
-//#include "soc/soc.h"
-//#include "soc/rtc_cntl_reg.h"
+// Include libraries
+#include <SimpleDHT.h>
+#include <SPI.h>
+#include <SD.h>
 
-#define moisturePin A1  //4  // used for ESP32
-#define smokePin A2    //5  // used for ESP32
+
+// Define connections to IO
+#define moisturePin A1  //4 used for ESP32
+#define smokePin A2     //5 used for ESP32
+#define pinDHT11 2
+#define sdPin 4
 
 
-// Timings
-unsigned long previousMillis1 = 0;     // will store last time LED was updated
-unsigned long previousMillis2 = 0;     // will store last time LED was updated
-const long smokeInterval = 1000;  
-const long moistureInterval = 5000;  
+// Event Timings
+const int smokeInterval = 1000;  
+const int moistureInterval = 5000;
+const int logInterval = 10000;
+   
+unsigned long previousMillis1 = 0;     
+unsigned long previousMillis2 = 0;  
+unsigned long previousMillis3 = 0;    
 
-float sensorValue;
+// sensor values
+float smoke,moisture;
+byte temperature = 0;
+byte airHumidity = 0;
+
+// Initializing objects
+SimpleDHT11 dht11(pinDHT11);
+
+
+//Functions
+void logData(){
+  // see if the card is present and can be initialized:
+  if (!SD.begin(sdPin)) {
+    Serial.println("Card failed, or not present");
+    // don't do anything more:
+    while (1);
+  }
+  Serial.println("card initialized.");
+  File dataFile = SD.open("data.csv", FILE_WRITE);
+   // if the file is available, write to it:
+  if (dataFile) {
+    String sensor_data =(String) moisture+","+ (String) temperature+"," + (String)airHumidity+"\n";
+    dataFile.println(sensor_data);
+    dataFile.close();
+    Serial.println("Success");
+  }
+  else { 
+    // if the file isn't open, pop up an error:
+    Serial.println("error opening data.csv");
+  }
+}
 
 void setup() { 
-//  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); 
   Serial.begin(9600);
+//  if (!SD.begin(sdPin)) {
+//    Serial.println("Card failed, or not present");
+//    // don't do anything more:
+//    while (1);
+//  }
+//  Serial.println("card initialized.");
+  
 }
 
 void loop() {
   unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis2 >= moistureInterval) {
-    previousMillis2 = currentMillis;
-    sensorValue = map(analogRead(moisturePin),0,1024,0,100);
-    Serial.print("moisture level: ");
-    Serial.print(sensorValue);
-    Serial.print(" %");
-  }
-  if (currentMillis - previousMillis1 >= smokeInterval) {
+  if (currentMillis - previousMillis1 >= moistureInterval) {
     previousMillis1 = currentMillis;
-    sensorValue = map(analogRead(smokePin),0,1024,0,100);
+    moisture = map(analogRead(moisturePin),0,1024,0,100);
+    Serial.print("moisture level: ");
+    Serial.print(moisture);
+    Serial.print(" % ");
+    
+
+    int err = SimpleDHTErrSuccess;
+    if((err = dht11.read(&temperature, &airHumidity, NULL)) != SimpleDHTErrSuccess) {
+    Serial.print("Read DHT11 failed, err=");
+    Serial.println(err);
+    }else{
+      Serial.print("Temperature: ");
+      Serial.print(temperature);
+      Serial.print(" °C");
+    }
+  }
+  if (currentMillis - previousMillis2 >= smokeInterval) {
+    previousMillis2 = currentMillis;
+    smoke = 100 - map(analogRead(smokePin),0,1024,0,100);
     Serial.print(" Smoke level: ");
-    Serial.print(sensorValue);
+    Serial.print(smoke);
     Serial.println(" %");
   }
-  
 
+  if (currentMillis - previousMillis3 >= logInterval) {
+    previousMillis3 = currentMillis;
+    // write logging codes here
+  }
 } 
